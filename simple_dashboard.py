@@ -82,11 +82,11 @@ def fetch_naver_data(keyword_groups, start_date, end_date):
     """네이버에서 검색 데이터 가져오기 (여러 그룹 지원)"""
     url = "https://openapi.naver.com/v1/datalab/search"
     
-    # API 키 가져오기 (우선순위: 사용자별 세션 > 환경변수 > secrets)
+    # API 키 가져오기 (사용자별 세션에서만)
     client_id = None
     client_secret = None
     
-    # 1. 사용자별 세션에서 임시 API 키 확인
+    # 사용자별 세션에서만 API 키 확인 (환경변수/Secrets 사용 안함)
     try:
         import streamlit as st
         if hasattr(st, 'session_state') and 'user_session_id' in st.session_state:
@@ -101,21 +101,6 @@ def fetch_naver_data(keyword_groups, start_date, end_date):
     except:
         pass
     
-    # 2. 환경변수에서 API 키 가져오기 (공유됨 - 주의!)
-    if not client_id or not client_secret:
-        client_id = os.environ.get("NAVER_CLIENT_ID")
-        client_secret = os.environ.get("NAVER_CLIENT_SECRET")
-    
-    # 3. Streamlit secrets에서 시도 (공유됨 - 주의!)
-    if not client_id or not client_secret:
-        try:
-            import streamlit as st
-            if hasattr(st, 'secrets') and 'NAVER_CLIENT_ID' in st.secrets:
-                client_id = st.secrets['NAVER_CLIENT_ID']
-                client_secret = st.secrets['NAVER_CLIENT_SECRET']
-        except:
-            pass
-    
     headers = {
         "X-Naver-Client-Id": client_id,
         "X-Naver-Client-Secret": client_secret,
@@ -126,7 +111,7 @@ def fetch_naver_data(keyword_groups, start_date, end_date):
         debug_info = f"Client ID: {'설정됨' if client_id else '없음'}, Client Secret: {'설정됨' if client_secret else '없음'}"
         return None, f"❌ 네이버 API 키가 없습니다. {debug_info}"
     
-    # API 사용량 모니터링 (사용자별 + 공유 API 키 감지)
+    # API 사용량 모니터링 (사용자별 개인 API만)
     try:
         import streamlit as st
         if hasattr(st, 'session_state') and 'user_session_id' in st.session_state:
@@ -138,33 +123,11 @@ def fetch_naver_data(keyword_groups, start_date, end_date):
                 st.session_state[api_usage_key] = 0
             st.session_state[api_usage_key] += 1
             
-            # 공유 API 키 사용 감지 (환경변수나 secrets 사용 시)
-            is_shared_api = (
-                not (f"{user_prefix}temp_client_id" in st.session_state and 
-                     f"{user_prefix}temp_client_secret" in st.session_state)
-            )
-            
-            if is_shared_api:
-                # 공유 API 키 사용 시 더 강한 경고
-                st.error(f"""
-                🚨 **공유 API 키 사용 중!**
-                
-                - 현재 사용량: {st.session_state[api_usage_key]}회
-                - **경고**: 다른 사용자도 같은 API 키를 사용할 수 있습니다!
-                - **위험**: 사용량이 누적되어 일일 한도 초과 위험이 있습니다!
-                """)
-                
-                # 사용량이 많을 때 추가 경고
-                if st.session_state[api_usage_key] > 300:
-                    st.error("🚨 **위험**: 공유 API 사용량이 많습니다! 다른 사용자에게 영향을 줄 수 있습니다!")
-                elif st.session_state[api_usage_key] > 100:
-                    st.warning("⚠️ **주의**: 공유 API 사용량이 증가하고 있습니다.")
-            else:
-                # 개인 API 키 사용 시 일반 경고
-                if st.session_state[api_usage_key] > 800:
-                    st.warning(f"⚠️ API 사용량이 많습니다! (현재: {st.session_state[api_usage_key]}회)")
-                elif st.session_state[api_usage_key] > 500:
-                    st.info(f"📊 API 사용량: {st.session_state[api_usage_key]}회")
+            # 개인 API 키 사용량 경고
+            if st.session_state[api_usage_key] > 800:
+                st.warning(f"⚠️ API 사용량이 많습니다! (현재: {st.session_state[api_usage_key]}회)")
+            elif st.session_state[api_usage_key] > 500:
+                st.info(f"📊 API 사용량: {st.session_state[api_usage_key]}회")
     except:
         pass
     
@@ -414,27 +377,16 @@ def main():
         # API 키 설정
         st.markdown("### 1️⃣ 네이버 API 키")
         
-        # API 키 관리 옵션
+        # API 키 관리 옵션 (공유 API 비활성화)
+        st.info("🔒 **보안 정책**: 모든 사용자는 개인 API 키를 직접 입력해야 합니다.")
+        
         api_mode = st.radio(
             "API 키 입력 방식",
-            ["매번 입력 (보안 강화)", "임시 저장 (편의성)", "환경변수 사용"],
-            help="보안을 위해서는 '매번 입력'을 권장합니다"
+            ["매번 입력 (권장)", "임시 저장 (세션 내)"],
+            help="보안을 위해 개인 API 키만 사용 가능합니다"
         )
         
-        # 현재 설정된 API 키 상태 확인
-        current_client_id = os.environ.get("NAVER_CLIENT_ID", "")
-        current_client_secret = os.environ.get("NAVER_CLIENT_SECRET", "")
-        
-        # Streamlit secrets에서 시도
-        if not current_client_id or not current_client_secret:
-            try:
-                if hasattr(st, 'secrets') and 'NAVER_CLIENT_ID' in st.secrets:
-                    current_client_id = st.secrets['NAVER_CLIENT_ID']
-                    current_client_secret = st.secrets['NAVER_CLIENT_SECRET']
-            except:
-                pass
-        
-        if api_mode == "매번 입력 (보안 강화)":
+        if api_mode == "매번 입력 (권장)":
             st.info("🔒 **보안 강화 모드**: API 키를 매번 새로 입력합니다.")
             
             # 사용자별 API 키 키 생성
@@ -486,144 +438,95 @@ def main():
                 else:
                     st.warning("⏰ API 키 세션이 만료되었습니다.")
         
-        elif api_mode == "임시 저장 (편의성)":
-            if current_client_id and current_client_secret:
+        else:  # 임시 저장 (세션 내)
+            st.info("💾 **임시 저장 모드**: 현재 세션 동안만 API 키를 저장합니다.")
+            
+            # 사용자별 API 키 키 생성
+            user_client_id_key = f"{user_prefix}temp_client_id"
+            user_client_secret_key = f"{user_prefix}temp_client_secret"
+            user_api_key_time_key = f"{user_prefix}api_key_set_time"
+            
+            # 세션 만료 시간 설정 (2시간)
+            session_timeout = 2 * 60 * 60  # 2시간
+            current_time = time.time()
+            
+            # 세션 만료 확인
+            if (st.session_state.get(user_client_id_key) and 
+                st.session_state.get(user_client_secret_key) and
+                st.session_state.get(user_api_key_time_key, 0) + session_timeout < current_time):
+                # 세션 만료 - API 키 자동 삭제
+                del st.session_state[user_client_id_key]
+                del st.session_state[user_client_secret_key]
+                del st.session_state[user_api_key_time_key]
+                st.warning("⏰ API 키 세션이 만료되었습니다. 다시 입력해주세요.")
+            
+            if st.session_state.get(user_client_id_key) and st.session_state.get(user_client_secret_key):
                 # API 키가 설정되어 있으면 마스킹해서 표시
-                masked_id = current_client_id[:4] + "*" * (len(current_client_id) - 8) + current_client_id[-4:] if len(current_client_id) > 8 else "*" * len(current_client_id)
+                masked_id = st.session_state[user_client_id_key][:4] + "*" * (len(st.session_state[user_client_id_key]) - 8) + st.session_state[user_client_id_key][-4:] if len(st.session_state[user_client_id_key]) > 8 else "*" * len(st.session_state[user_client_id_key])
                 st.success(f"✅ API 키가 설정되어 있습니다! (Client ID: {masked_id})")
                 
-                col1, col2 = st.columns(2)
+                # 남은 시간 계산
+                remaining_time = int((st.session_state.get(user_api_key_time_key, 0) + session_timeout - current_time) / 60)
+                if remaining_time > 0:
+                    st.info(f"⏰ 남은 시간: {remaining_time}분")
+                
+                col1, col2, col3 = st.columns(3)
                 with col1:
-                    if st.button("🔄 API 키 재설정"):
+                    if st.button("🔄 API 키 재설정", key=f"{user_prefix}reset_btn"):
                         st.session_state.reset_api_keys = True
                 with col2:
-                    if st.button("🗑️ API 키 삭제"):
-                        del os.environ["NAVER_CLIENT_ID"]
-                        del os.environ["NAVER_CLIENT_SECRET"]
+                    if st.button("🗑️ API 키 삭제", key=f"{user_prefix}delete_btn"):
+                        del st.session_state[user_client_id_key]
+                        del st.session_state[user_client_secret_key]
+                        del st.session_state[user_api_key_time_key]
                         st.success("✅ API 키가 삭제되었습니다!")
+                        st.rerun()
+                with col3:
+                    if st.button("⏰ 시간 연장", key=f"{user_prefix}extend_btn"):
+                        st.session_state[user_api_key_time_key] = current_time
+                        st.success("✅ 세션이 2시간 연장되었습니다!")
                         st.rerun()
                 
                 if st.session_state.get('reset_api_keys', False):
-                    client_id = st.text_input("새 Client ID", type="password", key="new_client_id")
-                    client_secret = st.text_input("새 Client Secret", type="password", key="new_client_secret")
+                    client_id = st.text_input("새 Client ID", type="password", key=f"{user_prefix}new_client_id")
+                    client_secret = st.text_input("새 Client Secret", type="password", key=f"{user_prefix}new_client_secret")
                     
                     if client_id and client_secret:
-                        os.environ["NAVER_CLIENT_ID"] = client_id
-                        os.environ["NAVER_CLIENT_SECRET"] = client_secret
+                        st.session_state[user_client_id_key] = client_id
+                        st.session_state[user_client_secret_key] = client_secret
+                        st.session_state[user_api_key_time_key] = current_time
                         st.success("✅ API 키가 업데이트되었습니다!")
                         st.session_state.reset_api_keys = False
                         st.rerun()
             else:
                 st.warning("⚠️ API 키를 입력해주세요")
-                client_id = st.text_input("Client ID", type="password", key="temp_client_id")
-                client_secret = st.text_input("Client Secret", type="password", key="temp_client_secret")
+                client_id = st.text_input("Client ID", type="password", key=f"{user_prefix}temp_client_id_input")
+                client_secret = st.text_input("Client Secret", type="password", key=f"{user_prefix}temp_client_secret_input")
                 
                 if client_id and client_secret:
-                    os.environ["NAVER_CLIENT_ID"] = client_id
-                    os.environ["NAVER_CLIENT_SECRET"] = client_secret
+                    st.session_state[user_client_id_key] = client_id
+                    st.session_state[user_client_secret_key] = client_secret
+                    st.session_state[user_api_key_time_key] = current_time
                     st.success("✅ API 키가 설정되었습니다!")
         
-        else:  # 환경변수 사용
-            if current_client_id and current_client_secret:
-                masked_id = current_client_id[:4] + "*" * (len(current_client_id) - 8) + current_client_id[-4:] if len(current_client_id) > 8 else "*" * len(current_client_id)
-                
-                # 🚨 보안 경고 표시
-                st.error("🚨 **보안 경고**: 환경변수 API 키 사용 중!")
-                st.warning(f"""
-                **⚠️ 다중 사용자 환경에서 위험합니다!**
-                
-                - **현재 사용자**: 세션 ID `{st.session_state.user_session_id}`
-                - **API 키**: {masked_id}
-                - **문제점**: 다른 모든 사용자도 이 API 키를 사용할 수 있습니다!
-                - **권장사항**: '매번 입력' 방식으로 변경하세요
-                """)
-                
-                # API 키 소유권 확인
-                st.markdown("### 🔍 API 키 소유권 확인")
-                owner_name = st.text_input(
-                    "이 API 키의 소유자 이름을 입력하세요",
-                    placeholder="예: 홍길동",
-                    help="API 키 사용 권한을 확인하기 위한 정보입니다"
-                )
-                
-                if owner_name:
-                    # 소유자 정보를 세션에 저장
-                    owner_key = f"{user_prefix}api_owner"
-                    st.session_state[owner_key] = owner_name
-                    st.success(f"✅ API 키 소유자 확인: {owner_name}")
-                    
-                    # 다른 사용자 경고
-                    st.warning(f"""
-                    **현재 상황:**
-                    - API 키 소유자: {owner_name}
-                    - 현재 사용자: 세션 ID `{st.session_state.user_session_id}`
-                    
-                    **주의사항:**
-                    - 이 API 키는 {owner_name}님의 것입니다
-                    - 사용량이 공유되므로 신중하게 사용하세요
-                    - 가능하면 본인의 API 키를 사용하세요
-                    """)
-                else:
-                    st.info("💡 API 키 소유자를 입력하면 사용 권한을 확인할 수 있습니다.")
-                
-                # 사용량 경고
-                st.markdown("### 📊 공유 API 사용량")
-                st.error("""
-                **⚠️ 모든 사용자가 이 API 키를 공유합니다!**
-                - API 사용량이 모든 사용자에게 누적됩니다
-                - 일일 한도(1000회)를 초과하면 모든 사용자가 영향을 받습니다
-                - 가능하면 개인 API 키를 사용하세요
-                """)
-                
-            else:
-                st.error("❌ 환경변수에 API 키가 설정되지 않았습니다.")
-                st.info("""
-                **환경변수 설정 방법:**
-                ```bash
-                export NAVER_CLIENT_ID="your_client_id"
-                export NAVER_CLIENT_SECRET="your_client_secret"
-                ```
-                
-                **⚠️ 주의**: 환경변수는 모든 사용자가 공유합니다!
-                """)
-        
-        # API 사용량 표시
+        # API 사용량 표시 (개인 API만)
         api_usage_key = f"{user_prefix}api_usage_count"
         if api_usage_key in st.session_state:
             usage_count = st.session_state[api_usage_key]
             st.markdown("---")
-            st.markdown("### 📊 API 사용량")
+            st.markdown("### 📊 개인 API 사용량")
             
-            # 공유 API 키 사용 여부 확인
-            is_shared_api = (
-                not (f"{user_prefix}temp_client_id" in st.session_state and 
-                     f"{user_prefix}temp_client_secret" in st.session_state)
-            )
-            
-            if is_shared_api:
-                # 공유 API 키 사용 시 특별 표시
-                st.error(f"🚨 **공유 API 사용**: {usage_count}회")
-                st.warning("""
-                ⚠️ **위험**: 다른 사용자와 API 키를 공유 중입니다!
-                - 사용량이 누적되어 일일 한도 초과 위험
-                - 다른 사용자에게 영향을 줄 수 있음
-                - 개인 API 키 사용을 권장합니다
-                """)
-                
-                if usage_count > 300:
-                    st.error("🚨 **매우 위험**: 공유 API 사용량이 과도합니다!")
-                elif usage_count > 100:
-                    st.warning("⚠️ **주의**: 공유 API 사용량이 증가 중입니다.")
+            # 개인 API 키 사용량 표시
+            if usage_count > 800:
+                st.error(f"🚨 **높음**: {usage_count}회 (일일 한도 근접)")
+            elif usage_count > 500:
+                st.warning(f"⚠️ **주의**: {usage_count}회")
+            elif usage_count > 100:
+                st.info(f"📈 **보통**: {usage_count}회")
             else:
-                # 개인 API 키 사용 시 일반 표시
-                if usage_count > 800:
-                    st.error(f"🚨 **높음**: {usage_count}회 (일일 한도 근접)")
-                elif usage_count > 500:
-                    st.warning(f"⚠️ **주의**: {usage_count}회")
-                elif usage_count > 100:
-                    st.info(f"📈 **보통**: {usage_count}회")
-                else:
-                    st.success(f"✅ **정상**: {usage_count}회")
+                st.success(f"✅ **정상**: {usage_count}회")
+            
+            st.info("🔒 **안전**: 개인 API 키만 사용 중입니다!")
             
             if st.button("🔄 사용량 초기화", key=f"{user_prefix}reset_usage"):
                 st.session_state[api_usage_key] = 0
@@ -639,15 +542,21 @@ def main():
             3. 데이터랩 API 선택
             4. Client ID와 Client Secret 발급
             
-            **보안 주의사항:**
+            **🔒 보안 정책:**
+            - **모든 사용자는 개인 API 키를 직접 입력해야 합니다**
+            - 환경변수나 Streamlit Secrets 사용 불가
             - API 키는 절대 공개하지 마세요
-            - GitHub에 업로드할 때는 환경변수나 Streamlit Secrets를 사용하세요
             - 정기적으로 API 키를 갱신하세요
-            - **다중 사용자 환경에서는 '매번 입력' 방식을 권장합니다**
             
-            **API 사용량 제한:**
+            **📊 API 사용량 제한:**
             - 일일 1,000회 제한 (네이버 정책)
-            - 사용량이 많으면 다른 사용자에게 영향을 줄 수 있습니다
+            - 각 사용자는 개인 API 키의 사용량만 사용
+            - 다른 사용자에게 영향을 주지 않습니다
+            
+            **✅ 안전한 사용:**
+            - 개인 API 키만 사용하여 완전한 격리
+            - 사용자별 세션 관리로 보안 강화
+            - 자동 세션 만료로 안전성 보장
             """)
         
         # 검색량 변환 옵션
