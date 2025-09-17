@@ -355,7 +355,7 @@ def main():
                     os.environ["NAVER_CLIENT_SECRET"] = client_secret
                     st.success("✅ API 키가 업데이트되었습니다!")
                     st.session_state.reset_api_keys = False
-                    st.experimental_rerun()
+                    st.rerun()
         else:
             st.warning("⚠️ API 키를 입력해주세요")
             client_id = st.text_input("Client ID", type="password")
