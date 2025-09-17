@@ -126,7 +126,7 @@ def fetch_naver_data(keyword_groups, start_date, end_date):
         debug_info = f"Client ID: {'설정됨' if client_id else '없음'}, Client Secret: {'설정됨' if client_secret else '없음'}"
         return None, f"❌ 네이버 API 키가 없습니다. {debug_info}"
     
-    # API 사용량 모니터링 (사용자별)
+    # API 사용량 모니터링 (사용자별 + 공유 API 키 감지)
     try:
         import streamlit as st
         if hasattr(st, 'session_state') and 'user_session_id' in st.session_state:
@@ -138,11 +138,33 @@ def fetch_naver_data(keyword_groups, start_date, end_date):
                 st.session_state[api_usage_key] = 0
             st.session_state[api_usage_key] += 1
             
-            # 사용량 경고 (하루 1000회 제한 기준)
-            if st.session_state[api_usage_key] > 800:
-                st.warning(f"⚠️ API 사용량이 많습니다! (현재: {st.session_state[api_usage_key]}회)")
-            elif st.session_state[api_usage_key] > 500:
-                st.info(f"📊 API 사용량: {st.session_state[api_usage_key]}회")
+            # 공유 API 키 사용 감지 (환경변수나 secrets 사용 시)
+            is_shared_api = (
+                not (f"{user_prefix}temp_client_id" in st.session_state and 
+                     f"{user_prefix}temp_client_secret" in st.session_state)
+            )
+            
+            if is_shared_api:
+                # 공유 API 키 사용 시 더 강한 경고
+                st.error(f"""
+                🚨 **공유 API 키 사용 중!**
+                
+                - 현재 사용량: {st.session_state[api_usage_key]}회
+                - **경고**: 다른 사용자도 같은 API 키를 사용할 수 있습니다!
+                - **위험**: 사용량이 누적되어 일일 한도 초과 위험이 있습니다!
+                """)
+                
+                # 사용량이 많을 때 추가 경고
+                if st.session_state[api_usage_key] > 300:
+                    st.error("🚨 **위험**: 공유 API 사용량이 많습니다! 다른 사용자에게 영향을 줄 수 있습니다!")
+                elif st.session_state[api_usage_key] > 100:
+                    st.warning("⚠️ **주의**: 공유 API 사용량이 증가하고 있습니다.")
+            else:
+                # 개인 API 키 사용 시 일반 경고
+                if st.session_state[api_usage_key] > 800:
+                    st.warning(f"⚠️ API 사용량이 많습니다! (현재: {st.session_state[api_usage_key]}회)")
+                elif st.session_state[api_usage_key] > 500:
+                    st.info(f"📊 API 사용량: {st.session_state[api_usage_key]}회")
     except:
         pass
     
@@ -504,8 +526,55 @@ def main():
         else:  # 환경변수 사용
             if current_client_id and current_client_secret:
                 masked_id = current_client_id[:4] + "*" * (len(current_client_id) - 8) + current_client_id[-4:] if len(current_client_id) > 8 else "*" * len(current_client_id)
-                st.success(f"✅ 환경변수에서 API 키를 가져왔습니다! (Client ID: {masked_id})")
-                st.info("💡 환경변수에서 API 키를 사용 중입니다. 변경하려면 시스템 환경변수를 수정하세요.")
+                
+                # 🚨 보안 경고 표시
+                st.error("🚨 **보안 경고**: 환경변수 API 키 사용 중!")
+                st.warning(f"""
+                **⚠️ 다중 사용자 환경에서 위험합니다!**
+                
+                - **현재 사용자**: 세션 ID `{st.session_state.user_session_id}`
+                - **API 키**: {masked_id}
+                - **문제점**: 다른 모든 사용자도 이 API 키를 사용할 수 있습니다!
+                - **권장사항**: '매번 입력' 방식으로 변경하세요
+                """)
+                
+                # API 키 소유권 확인
+                st.markdown("### 🔍 API 키 소유권 확인")
+                owner_name = st.text_input(
+                    "이 API 키의 소유자 이름을 입력하세요",
+                    placeholder="예: 홍길동",
+                    help="API 키 사용 권한을 확인하기 위한 정보입니다"
+                )
+                
+                if owner_name:
+                    # 소유자 정보를 세션에 저장
+                    owner_key = f"{user_prefix}api_owner"
+                    st.session_state[owner_key] = owner_name
+                    st.success(f"✅ API 키 소유자 확인: {owner_name}")
+                    
+                    # 다른 사용자 경고
+                    st.warning(f"""
+                    **현재 상황:**
+                    - API 키 소유자: {owner_name}
+                    - 현재 사용자: 세션 ID `{st.session_state.user_session_id}`
+                    
+                    **주의사항:**
+                    - 이 API 키는 {owner_name}님의 것입니다
+                    - 사용량이 공유되므로 신중하게 사용하세요
+                    - 가능하면 본인의 API 키를 사용하세요
+                    """)
+                else:
+                    st.info("💡 API 키 소유자를 입력하면 사용 권한을 확인할 수 있습니다.")
+                
+                # 사용량 경고
+                st.markdown("### 📊 공유 API 사용량")
+                st.error("""
+                **⚠️ 모든 사용자가 이 API 키를 공유합니다!**
+                - API 사용량이 모든 사용자에게 누적됩니다
+                - 일일 한도(1000회)를 초과하면 모든 사용자가 영향을 받습니다
+                - 가능하면 개인 API 키를 사용하세요
+                """)
+                
             else:
                 st.error("❌ 환경변수에 API 키가 설정되지 않았습니다.")
                 st.info("""
@@ -514,6 +583,8 @@ def main():
                 export NAVER_CLIENT_ID="your_client_id"
                 export NAVER_CLIENT_SECRET="your_client_secret"
                 ```
+                
+                **⚠️ 주의**: 환경변수는 모든 사용자가 공유합니다!
                 """)
         
         # API 사용량 표시
@@ -523,14 +594,36 @@ def main():
             st.markdown("---")
             st.markdown("### 📊 API 사용량")
             
-            if usage_count > 800:
-                st.error(f"🚨 **높음**: {usage_count}회 (일일 한도 근접)")
-            elif usage_count > 500:
-                st.warning(f"⚠️ **주의**: {usage_count}회")
-            elif usage_count > 100:
-                st.info(f"📈 **보통**: {usage_count}회")
+            # 공유 API 키 사용 여부 확인
+            is_shared_api = (
+                not (f"{user_prefix}temp_client_id" in st.session_state and 
+                     f"{user_prefix}temp_client_secret" in st.session_state)
+            )
+            
+            if is_shared_api:
+                # 공유 API 키 사용 시 특별 표시
+                st.error(f"🚨 **공유 API 사용**: {usage_count}회")
+                st.warning("""
+                ⚠️ **위험**: 다른 사용자와 API 키를 공유 중입니다!
+                - 사용량이 누적되어 일일 한도 초과 위험
+                - 다른 사용자에게 영향을 줄 수 있음
+                - 개인 API 키 사용을 권장합니다
+                """)
+                
+                if usage_count > 300:
+                    st.error("🚨 **매우 위험**: 공유 API 사용량이 과도합니다!")
+                elif usage_count > 100:
+                    st.warning("⚠️ **주의**: 공유 API 사용량이 증가 중입니다.")
             else:
-                st.success(f"✅ **정상**: {usage_count}회")
+                # 개인 API 키 사용 시 일반 표시
+                if usage_count > 800:
+                    st.error(f"🚨 **높음**: {usage_count}회 (일일 한도 근접)")
+                elif usage_count > 500:
+                    st.warning(f"⚠️ **주의**: {usage_count}회")
+                elif usage_count > 100:
+                    st.info(f"📈 **보통**: {usage_count}회")
+                else:
+                    st.success(f"✅ **정상**: {usage_count}회")
             
             if st.button("🔄 사용량 초기화", key=f"{user_prefix}reset_usage"):
                 st.session_state[api_usage_key] = 0
