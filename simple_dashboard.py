@@ -74,14 +74,30 @@ st.markdown("""
 def fetch_naver_data(keyword_groups, start_date, end_date):
     """네이버에서 검색 데이터 가져오기 (여러 그룹 지원)"""
     url = "https://openapi.naver.com/v1/datalab/search"
+    
+    # 환경변수에서 API 키 가져오기 (Streamlit Cloud 호환)
+    client_id = os.environ.get("NAVER_CLIENT_ID")
+    client_secret = os.environ.get("NAVER_CLIENT_SECRET")
+    
+    # Streamlit secrets에서도 시도
+    if not client_id or not client_secret:
+        try:
+            import streamlit as st
+            secrets = st.secrets
+            client_id = secrets.get("NAVER_CLIENT_ID", client_id)
+            client_secret = secrets.get("NAVER_CLIENT_SECRET", client_secret)
+        except:
+            pass
+    
     headers = {
-        "X-Naver-Client-Id": os.environ.get("NAVER_CLIENT_ID"),
-        "X-Naver-Client-Secret": os.environ.get("NAVER_CLIENT_SECRET"),
+        "X-Naver-Client-Id": client_id,
+        "X-Naver-Client-Secret": client_secret,
         "Content-Type": "application/json",
     }
     
-    if not headers["X-Naver-Client-Id"]:
-        return None, "❌ 네이버 API 키가 없습니다. 사이드바에서 설정해주세요."
+    if not client_id or not client_secret:
+        debug_info = f"Client ID: {'설정됨' if client_id else '없음'}, Client Secret: {'설정됨' if client_secret else '없음'}"
+        return None, f"❌ 네이버 API 키가 없습니다. {debug_info}"
     
     all_rows = []
     
