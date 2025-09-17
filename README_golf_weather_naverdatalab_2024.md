@@ -16,13 +16,13 @@
    - 환경변수 설정 (터미널/파워셸 등):
      - macOS/Linux:  
        ```bash
-       export NAVER_CLIENT_ID="MWTciDXcyBUgaCVUJDhG"
-       export NAVER_CLIENT_SECRET="2a8vSEh7wY"
+       export NAVER_CLIENT_ID="your_client_id_here"
+       export NAVER_CLIENT_SECRET="your_client_secret_here"
        ```
      - Windows (PowerShell):  
        ```powershell
-       setx NAVER_CLIENT_ID "발급받은클라이언트ID"
-       setx NAVER_CLIENT_SECRET "발급받은시크릿"
+       setx NAVER_CLIENT_ID "your_client_id_here"
+       setx NAVER_CLIENT_SECRET "your_client_secret_here"
        ```
    - 데이터랩 Search Trend 문서 참고.
 

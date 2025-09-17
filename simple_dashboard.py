@@ -343,6 +343,29 @@ def main():
     st.markdown('<h1 class="main-title">🔍 키워드 날씨 분석기</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">키워드 검색량과 날씨의 관계를 분석해보세요!</p>', unsafe_allow_html=True)
     
+    # 웹 공유용 보안 경고
+    with st.expander("🚨 웹 공유 보안 안내", expanded=True):
+        st.error("""
+        **⚠️ 중요: 이 앱은 웹에서 공개적으로 공유됩니다!**
+        
+        **🔒 보안 정책:**
+        - 모든 사용자는 **개인 API 키를 직접 입력**해야 합니다
+        - **절대 다른 사람의 API 키를 사용하지 마세요**
+        - API 키는 **절대 공개하지 마세요**
+        - 사용 후 **반드시 API 키를 삭제**하세요
+        
+        **✅ 안전한 사용법:**
+        1. 본인의 네이버 데이터랩 API 키를 준비하세요
+        2. "매번 입력" 방식을 선택하세요
+        3. 사용 후 "API 키 삭제" 버튼을 클릭하세요
+        4. 브라우저를 닫기 전에 모든 탭을 닫으세요
+        
+        **🚨 절대 하지 마세요:**
+        - 다른 사람의 API 키 사용
+        - API 키를 채팅이나 공개 채널에 공유
+        - API 키를 스크린샷으로 저장
+        """)
+    
     # 사용자 세션 ID 생성 (고유 식별자)
     if 'user_session_id' not in st.session_state:
         import uuid
