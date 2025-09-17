@@ -10,6 +10,13 @@ import requests
 import json
 import time
 
+# .env 파일 로드 (선택사항)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv가 설치되지 않은 경우 무시
+
 # 페이지 설정
 st.set_page_config(
     page_title="골프 날씨 트렌드 대시보드",
@@ -51,14 +58,43 @@ st.markdown("""
 def fetch_naver_datalab_daily(keyword_groups, start_date, end_date):
     """네이버 데이터랩에서 검색 트렌드 데이터 가져오기"""
     url = "https://openapi.naver.com/v1/datalab/search"
+    
+    # API 키 가져오기 (환경변수 -> Streamlit secrets 순서)
+    client_id = os.environ.get("NAVER_CLIENT_ID")
+    client_secret = os.environ.get("NAVER_CLIENT_SECRET")
+    
+    # Streamlit secrets에서 시도
+    if not client_id or not client_secret:
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and 'NAVER_CLIENT_ID' in st.secrets:
+                client_id = st.secrets['NAVER_CLIENT_ID']
+                client_secret = st.secrets['NAVER_CLIENT_SECRET']
+        except:
+            pass
+    
     headers = {
-        "X-Naver-Client-Id": os.environ.get("NAVER_CLIENT_ID"),
-        "X-Naver-Client-Secret": os.environ.get("NAVER_CLIENT_SECRET"),
+        "X-Naver-Client-Id": client_id,
+        "X-Naver-Client-Secret": client_secret,
         "Content-Type": "application/json",
     }
     
-    if not headers["X-Naver-Client-Id"] or not headers["X-Naver-Client-Secret"]:
-        st.error("네이버 API 자격증명이 설정되지 않았습니다. 환경변수를 확인해주세요.")
+    if not client_id or not client_secret:
+        st.error("⚠️ 네이버 API 자격증명이 설정되지 않았습니다.")
+        st.info("""
+        **API 키 설정 방법:**
+        1. **로컬 실행**: 환경변수 설정
+           ```bash
+           export NAVER_CLIENT_ID="your_client_id"
+           export NAVER_CLIENT_SECRET="your_client_secret"
+           ```
+        2. **Streamlit Cloud**: Secrets에서 설정
+           - Settings → Secrets → 다음 내용 추가:
+           ```
+           NAVER_CLIENT_ID = "your_client_id"
+           NAVER_CLIENT_SECRET = "your_client_secret"
+           ```
+        """)
         return None
     
     body = {

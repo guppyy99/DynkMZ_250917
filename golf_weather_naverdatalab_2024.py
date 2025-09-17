@@ -7,6 +7,13 @@ import requests
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# .env 파일 로드 (선택사항)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv가 설치되지 않은 경우 무시
+
 # ------------------ CONFIG ------------------
 START_DATE = "2024-01-01"
 END_DATE   = "2024-12-31"
@@ -39,9 +46,27 @@ def fetch_naver_datalab_daily(keyword_groups: List[Dict[str, Any]], start_date: 
     columns: [date, group, ratio]
     """
     url = "https://openapi.naver.com/v1/datalab/search"
+    
+    # API 키 가져오기 (환경변수에서)
+    client_id = os.environ.get("NAVER_CLIENT_ID")
+    client_secret = os.environ.get("NAVER_CLIENT_SECRET")
+    
+    if not client_id or not client_secret:
+        raise ValueError("""
+        네이버 API 자격증명이 설정되지 않았습니다.
+        
+        환경변수 설정 방법:
+        export NAVER_CLIENT_ID="your_client_id"
+        export NAVER_CLIENT_SECRET="your_client_secret"
+        
+        또는 .env 파일 사용:
+        NAVER_CLIENT_ID=your_client_id
+        NAVER_CLIENT_SECRET=your_client_secret
+        """)
+    
     headers = {
-        "X-Naver-Client-Id": os.environ["NAVER_CLIENT_ID"],
-        "X-Naver-Client-Secret": os.environ["NAVER_CLIENT_SECRET"],
+        "X-Naver-Client-Id": client_id,
+        "X-Naver-Client-Secret": client_secret,
         "Content-Type": "application/json",
     }
     body = {

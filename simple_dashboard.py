@@ -8,6 +8,13 @@ import os
 import requests
 import json
 
+# .env 파일 로드 (선택사항)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv가 설치되지 않은 경우 무시
+
 # 페이지 설정
 st.set_page_config(
     page_title="키워드 날씨 분석기",
@@ -316,15 +323,63 @@ def main():
         
         # API 키 설정
         st.markdown("### 1️⃣ 네이버 API 키")
-        client_id = st.text_input("Client ID", value=os.environ.get("NAVER_CLIENT_ID", ""), type="password")
-        client_secret = st.text_input("Client Secret", value=os.environ.get("NAVER_CLIENT_SECRET", ""), type="password")
         
-        if client_id and client_secret:
-            os.environ["NAVER_CLIENT_ID"] = client_id
-            os.environ["NAVER_CLIENT_SECRET"] = client_secret
-            st.success("✅ API 키가 설정되었습니다!")
+        # 현재 설정된 API 키 상태 확인
+        current_client_id = os.environ.get("NAVER_CLIENT_ID", "")
+        current_client_secret = os.environ.get("NAVER_CLIENT_SECRET", "")
+        
+        # Streamlit secrets에서 시도
+        if not current_client_id or not current_client_secret:
+            try:
+                if hasattr(st, 'secrets') and 'NAVER_CLIENT_ID' in st.secrets:
+                    current_client_id = st.secrets['NAVER_CLIENT_ID']
+                    current_client_secret = st.secrets['NAVER_CLIENT_SECRET']
+            except:
+                pass
+        
+        if current_client_id and current_client_secret:
+            # API 키가 설정되어 있으면 마스킹해서 표시
+            masked_id = current_client_id[:4] + "*" * (len(current_client_id) - 8) + current_client_id[-4:] if len(current_client_id) > 8 else "*" * len(current_client_id)
+            st.success(f"✅ API 키가 설정되어 있습니다! (Client ID: {masked_id})")
+            
+            # API 키 재설정 옵션
+            if st.button("🔄 API 키 재설정"):
+                st.session_state.reset_api_keys = True
+            
+            if st.session_state.get('reset_api_keys', False):
+                client_id = st.text_input("새 Client ID", type="password", key="new_client_id")
+                client_secret = st.text_input("새 Client Secret", type="password", key="new_client_secret")
+                
+                if client_id and client_secret:
+                    os.environ["NAVER_CLIENT_ID"] = client_id
+                    os.environ["NAVER_CLIENT_SECRET"] = client_secret
+                    st.success("✅ API 키가 업데이트되었습니다!")
+                    st.session_state.reset_api_keys = False
+                    st.experimental_rerun()
         else:
             st.warning("⚠️ API 키를 입력해주세요")
+            client_id = st.text_input("Client ID", type="password")
+            client_secret = st.text_input("Client Secret", type="password")
+            
+            if client_id and client_secret:
+                os.environ["NAVER_CLIENT_ID"] = client_id
+                os.environ["NAVER_CLIENT_SECRET"] = client_secret
+                st.success("✅ API 키가 설정되었습니다!")
+        
+        # API 키 설정 도움말
+        with st.expander("📖 API 키 설정 도움말"):
+            st.markdown("""
+            **네이버 데이터랩 API 키 발급 방법:**
+            1. [네이버 개발자센터](https://developers.naver.com/) 접속
+            2. 애플리케이션 등록
+            3. 데이터랩 API 선택
+            4. Client ID와 Client Secret 발급
+            
+            **보안 주의사항:**
+            - API 키는 절대 공개하지 마세요
+            - GitHub에 업로드할 때는 환경변수나 Streamlit Secrets를 사용하세요
+            - 정기적으로 API 키를 갱신하세요
+            """)
         
         # 검색량 변환 옵션
         st.markdown("### 3️⃣ 검색량 변환 (선택사항)")

@@ -1,0 +1,82 @@
+# 환경변수 파일 (API 키 포함)
+.env
+.env.local
+.env.production
+
+# Streamlit 설정 파일 (API 키 포함)
+.streamlit/secrets.toml
+.streamlit/secrets/
+
+# Python 캐시
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 분산
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# 단위 테스트 / 커버리지 보고서
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# 환경
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 데이터 파일 (선택사항)
+*.csv
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# 로그 파일
+*.log

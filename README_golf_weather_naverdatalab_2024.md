@@ -16,8 +16,8 @@
    - 환경변수 설정 (터미널/파워셸 등):
      - macOS/Linux:  
        ```bash
-       export NAVER_CLIENT_ID="발급받은클라이언트ID"
-       export NAVER_CLIENT_SECRET="발급받은시크릿"
+       export NAVER_CLIENT_ID="MWTciDXcyBUgaCVUJDhG"
+       export NAVER_CLIENT_SECRET="2a8vSEh7wY"
        ```
      - Windows (PowerShell):  
        ```powershell

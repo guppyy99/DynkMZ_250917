@@ -1,0 +1,15 @@
+# 네이버 데이터랩 API 키 예시 파일
+# 이 파일을 .env로 복사하여 사용하세요
+
+NAVER_CLIENT_ID=your_client_id_here
+NAVER_CLIENT_SECRET=your_client_secret_here
+
+# 사용법:
+# 1. 이 파일을 .env로 복사하세요
+# 2. your_client_id_here와 your_client_secret_here를 실제 API 키로 교체하세요
+# 3. .env 파일은 절대 GitHub에 업로드하지 마세요
+
+# Streamlit Cloud 배포시:
+# Streamlit Cloud의 Secrets에서 다음과 같이 설정하세요:
+# NAVER_CLIENT_ID: your_actual_client_id
+# NAVER_CLIENT_SECRET: your_actual_client_secret
