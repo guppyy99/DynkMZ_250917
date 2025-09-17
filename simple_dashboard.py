@@ -1001,23 +1001,70 @@ def main():
     # 강수량과 검색량의 상관관계
     correlation = merged_df['강수량'].corr(merged_df['검색량'])
     
-    if abs(correlation) > 0.3:
-        if correlation > 0:
-            st.success(f"🔗 **강한 양의 상관관계** 발견! (상관계수: {correlation:.3f})")
-            st.info("💡 비가 많이 올수록 키워드 검색량이 증가하는 경향이 있습니다.")
-        else:
-            st.success(f"🔗 **강한 음의 상관관계** 발견! (상관계수: {correlation:.3f})")
-            st.info("💡 비가 많이 올수록 키워드 검색량이 감소하는 경향이 있습니다.")
-    elif abs(correlation) > 0.1:
-        if correlation > 0:
-            st.info(f"🔗 **약한 양의 상관관계** (상관계수: {correlation:.3f})")
-            st.info("💡 비와 키워드 검색량 사이에 약간의 양의 관계가 있습니다.")
-        else:
-            st.info(f"🔗 **약한 음의 상관관계** (상관계수: {correlation:.3f})")
-            st.info("💡 비와 키워드 검색량 사이에 약간의 음의 관계가 있습니다.")
+    # 상관관계 강도 분류
+    if abs(correlation) >= 0.8:
+        strength = "매우 강한"
+        strength_emoji = "🔥"
+    elif abs(correlation) >= 0.6:
+        strength = "강한"
+        strength_emoji = "💪"
+    elif abs(correlation) >= 0.4:
+        strength = "중간"
+        strength_emoji = "⚖️"
+    elif abs(correlation) >= 0.2:
+        strength = "약한"
+        strength_emoji = "🤏"
     else:
-        st.info(f"🔗 **상관관계가 거의 없음** (상관계수: {correlation:.3f})")
-        st.info("💡 날씨와 키워드 검색량 사이에 명확한 상관관계가 없습니다.")
+        strength = "거의 없는"
+        strength_emoji = "❌"
+    
+    # 상관관계 방향 분류
+    if correlation > 0:
+        direction = "양의"
+        direction_emoji = "📈"
+        direction_desc = "강수량이 증가할수록 검색량도 증가"
+    elif correlation < 0:
+        direction = "음의"
+        direction_emoji = "📉"
+        direction_desc = "강수량이 증가할수록 검색량은 감소"
+    else:
+        direction = "없는"
+        direction_emoji = "➡️"
+        direction_desc = "강수량과 검색량 사이에 선형 관계 없음"
+    
+    # 결과 표시
+    if abs(correlation) >= 0.2:
+        st.success(f"🔗 **{strength_emoji} {strength} {direction} 상관관계** 발견! (상관계수: {correlation:.3f})")
+        st.info(f"💡 **해석**: {direction_desc}하는 경향이 있습니다.")
+        
+        # 상세 해석
+        if abs(correlation) >= 0.8:
+            st.markdown("🎯 **매우 강한 상관관계**: 거의 완벽한 직선적 관계")
+        elif abs(correlation) >= 0.6:
+            st.markdown("🎯 **강한 상관관계**: 명확한 선형 관계가 존재")
+        elif abs(correlation) >= 0.4:
+            st.markdown("🎯 **중간 상관관계**: 어느 정도의 선형 관계가 존재")
+        elif abs(correlation) >= 0.2:
+            st.markdown("🎯 **약한 상관관계**: 미미한 선형 관계가 존재")
+    else:
+        st.info(f"🔗 **{strength_emoji} 상관관계가 거의 없음** (상관계수: {correlation:.3f})")
+        st.info("💡 **해석**: 강수량과 키워드 검색량 사이에 명확한 선형 관계가 없습니다.")
+    
+    # 상관관계 해석 가이드
+    st.markdown("""
+    <div class="info-box">
+    <h4>📊 상관계수 해석 가이드</h4>
+    <ul>
+    <li><strong>+1 또는 -1</strong>: 완벽한 직선적 관계</li>
+    <li><strong>0.8~1.0</strong>: 매우 강한 상관관계</li>
+    <li><strong>0.6~0.8</strong>: 강한 상관관계</li>
+    <li><strong>0.4~0.6</strong>: 중간 상관관계</li>
+    <li><strong>0.2~0.4</strong>: 약한 상관관계</li>
+    <li><strong>0~0.2</strong>: 거의 없는 상관관계</li>
+    <li><strong>0</strong>: 선형 관계 없음</li>
+    </ul>
+    </div>
+    """, unsafe_allow_html=True)
     
     # 분석 방법 설명
     if location == "전국":
