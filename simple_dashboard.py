@@ -82,17 +82,31 @@ def fetch_naver_data(keyword_groups, start_date, end_date):
     """네이버에서 검색 데이터 가져오기 (여러 그룹 지원)"""
     url = "https://openapi.naver.com/v1/datalab/search"
     
-    # 환경변수에서 API 키 가져오기 (Streamlit Cloud 호환)
-    client_id = os.environ.get("NAVER_CLIENT_ID")
-    client_secret = os.environ.get("NAVER_CLIENT_SECRET")
+    # API 키 가져오기 (우선순위: 세션 > 환경변수 > secrets)
+    client_id = None
+    client_secret = None
     
-    # Streamlit secrets에서도 시도
+    # 1. 세션에서 임시 API 키 확인
+    try:
+        import streamlit as st
+        if hasattr(st.session_state, 'temp_client_id') and hasattr(st.session_state, 'temp_client_secret'):
+            client_id = st.session_state.temp_client_id
+            client_secret = st.session_state.temp_client_secret
+    except:
+        pass
+    
+    # 2. 환경변수에서 API 키 가져오기
+    if not client_id or not client_secret:
+        client_id = os.environ.get("NAVER_CLIENT_ID")
+        client_secret = os.environ.get("NAVER_CLIENT_SECRET")
+    
+    # 3. Streamlit secrets에서 시도
     if not client_id or not client_secret:
         try:
             import streamlit as st
-            secrets = st.secrets
-            client_id = secrets.get("NAVER_CLIENT_ID", client_id)
-            client_secret = secrets.get("NAVER_CLIENT_SECRET", client_secret)
+            if hasattr(st, 'secrets') and 'NAVER_CLIENT_ID' in st.secrets:
+                client_id = st.secrets['NAVER_CLIENT_ID']
+                client_secret = st.secrets['NAVER_CLIENT_SECRET']
         except:
             pass
     
@@ -324,6 +338,13 @@ def main():
         # API 키 설정
         st.markdown("### 1️⃣ 네이버 API 키")
         
+        # API 키 관리 옵션
+        api_mode = st.radio(
+            "API 키 입력 방식",
+            ["매번 입력 (보안 강화)", "임시 저장 (편의성)", "환경변수 사용"],
+            help="보안을 위해서는 '매번 입력'을 권장합니다"
+        )
+        
         # 현재 설정된 API 키 상태 확인
         current_client_id = os.environ.get("NAVER_CLIENT_ID", "")
         current_client_secret = os.environ.get("NAVER_CLIENT_SECRET", "")
@@ -337,34 +358,104 @@ def main():
             except:
                 pass
         
-        if current_client_id and current_client_secret:
-            # API 키가 설정되어 있으면 마스킹해서 표시
-            masked_id = current_client_id[:4] + "*" * (len(current_client_id) - 8) + current_client_id[-4:] if len(current_client_id) > 8 else "*" * len(current_client_id)
-            st.success(f"✅ API 키가 설정되어 있습니다! (Client ID: {masked_id})")
+        if api_mode == "매번 입력 (보안 강화)":
+            st.info("🔒 **보안 강화 모드**: API 키를 매번 새로 입력합니다.")
             
-            # API 키 재설정 옵션
-            if st.button("🔄 API 키 재설정"):
-                st.session_state.reset_api_keys = True
+            # 세션 만료 시간 설정 (30분)
+            session_timeout = 30 * 60  # 30분
+            current_time = time.time()
             
-            if st.session_state.get('reset_api_keys', False):
-                client_id = st.text_input("새 Client ID", type="password", key="new_client_id")
-                client_secret = st.text_input("새 Client Secret", type="password", key="new_client_secret")
+            # 세션 만료 확인
+            if (st.session_state.get('temp_client_id') and 
+                st.session_state.get('temp_client_secret') and
+                st.session_state.get('api_key_set_time', 0) + session_timeout < current_time):
+                # 세션 만료 - API 키 자동 삭제
+                del st.session_state.temp_client_id
+                del st.session_state.temp_client_secret
+                del st.session_state.api_key_set_time
+                st.warning("⏰ API 키 세션이 만료되었습니다. 다시 입력해주세요.")
+            
+            client_id = st.text_input("Client ID", type="password", key="secure_client_id")
+            client_secret = st.text_input("Client Secret", type="password", key="secure_client_secret")
+            
+            if client_id and client_secret:
+                # 세션에 임시 저장 (페이지 새로고침 시 사라짐)
+                st.session_state.temp_client_id = client_id
+                st.session_state.temp_client_secret = client_secret
+                st.session_state.api_key_set_time = current_time
+                st.success("✅ API 키가 임시로 설정되었습니다! (30분 후 자동 만료)")
+            elif st.session_state.get('temp_client_id') and st.session_state.get('temp_client_secret'):
+                # 남은 시간 계산
+                remaining_time = int((st.session_state.get('api_key_set_time', 0) + session_timeout - current_time) / 60)
+                if remaining_time > 0:
+                    st.success(f"✅ 임시 API 키가 설정되어 있습니다! (남은 시간: {remaining_time}분)")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("🗑️ API 키 삭제"):
+                            del st.session_state.temp_client_id
+                            del st.session_state.temp_client_secret
+                            del st.session_state.api_key_set_time
+                            st.rerun()
+                    with col2:
+                        if st.button("🔄 시간 연장"):
+                            st.session_state.api_key_set_time = current_time
+                            st.success("✅ 세션이 30분 연장되었습니다!")
+                            st.rerun()
+                else:
+                    st.warning("⏰ API 키 세션이 만료되었습니다.")
+        
+        elif api_mode == "임시 저장 (편의성)":
+            if current_client_id and current_client_secret:
+                # API 키가 설정되어 있으면 마스킹해서 표시
+                masked_id = current_client_id[:4] + "*" * (len(current_client_id) - 8) + current_client_id[-4:] if len(current_client_id) > 8 else "*" * len(current_client_id)
+                st.success(f"✅ API 키가 설정되어 있습니다! (Client ID: {masked_id})")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🔄 API 키 재설정"):
+                        st.session_state.reset_api_keys = True
+                with col2:
+                    if st.button("🗑️ API 키 삭제"):
+                        del os.environ["NAVER_CLIENT_ID"]
+                        del os.environ["NAVER_CLIENT_SECRET"]
+                        st.success("✅ API 키가 삭제되었습니다!")
+                        st.rerun()
+                
+                if st.session_state.get('reset_api_keys', False):
+                    client_id = st.text_input("새 Client ID", type="password", key="new_client_id")
+                    client_secret = st.text_input("새 Client Secret", type="password", key="new_client_secret")
+                    
+                    if client_id and client_secret:
+                        os.environ["NAVER_CLIENT_ID"] = client_id
+                        os.environ["NAVER_CLIENT_SECRET"] = client_secret
+                        st.success("✅ API 키가 업데이트되었습니다!")
+                        st.session_state.reset_api_keys = False
+                        st.rerun()
+            else:
+                st.warning("⚠️ API 키를 입력해주세요")
+                client_id = st.text_input("Client ID", type="password", key="temp_client_id")
+                client_secret = st.text_input("Client Secret", type="password", key="temp_client_secret")
                 
                 if client_id and client_secret:
                     os.environ["NAVER_CLIENT_ID"] = client_id
                     os.environ["NAVER_CLIENT_SECRET"] = client_secret
-                    st.success("✅ API 키가 업데이트되었습니다!")
-                    st.session_state.reset_api_keys = False
-                    st.rerun()
-        else:
-            st.warning("⚠️ API 키를 입력해주세요")
-            client_id = st.text_input("Client ID", type="password")
-            client_secret = st.text_input("Client Secret", type="password")
-            
-            if client_id and client_secret:
-                os.environ["NAVER_CLIENT_ID"] = client_id
-                os.environ["NAVER_CLIENT_SECRET"] = client_secret
-                st.success("✅ API 키가 설정되었습니다!")
+                    st.success("✅ API 키가 설정되었습니다!")
+        
+        else:  # 환경변수 사용
+            if current_client_id and current_client_secret:
+                masked_id = current_client_id[:4] + "*" * (len(current_client_id) - 8) + current_client_id[-4:] if len(current_client_id) > 8 else "*" * len(current_client_id)
+                st.success(f"✅ 환경변수에서 API 키를 가져왔습니다! (Client ID: {masked_id})")
+                st.info("💡 환경변수에서 API 키를 사용 중입니다. 변경하려면 시스템 환경변수를 수정하세요.")
+            else:
+                st.error("❌ 환경변수에 API 키가 설정되지 않았습니다.")
+                st.info("""
+                **환경변수 설정 방법:**
+                ```bash
+                export NAVER_CLIENT_ID="your_client_id"
+                export NAVER_CLIENT_SECRET="your_client_secret"
+                ```
+                """)
         
         # API 키 설정 도움말
         with st.expander("📖 API 키 설정 도움말"):
