@@ -82,25 +82,31 @@ def fetch_naver_data(keyword_groups, start_date, end_date):
     """네이버에서 검색 데이터 가져오기 (여러 그룹 지원)"""
     url = "https://openapi.naver.com/v1/datalab/search"
     
-    # API 키 가져오기 (우선순위: 세션 > 환경변수 > secrets)
+    # API 키 가져오기 (우선순위: 사용자별 세션 > 환경변수 > secrets)
     client_id = None
     client_secret = None
     
-    # 1. 세션에서 임시 API 키 확인
+    # 1. 사용자별 세션에서 임시 API 키 확인
     try:
         import streamlit as st
-        if hasattr(st.session_state, 'temp_client_id') and hasattr(st.session_state, 'temp_client_secret'):
-            client_id = st.session_state.temp_client_id
-            client_secret = st.session_state.temp_client_secret
+        if hasattr(st, 'session_state') and 'user_session_id' in st.session_state:
+            user_prefix = f"user_{st.session_state.user_session_id}_"
+            user_client_id_key = f"{user_prefix}temp_client_id"
+            user_client_secret_key = f"{user_prefix}temp_client_secret"
+            
+            if (user_client_id_key in st.session_state and 
+                user_client_secret_key in st.session_state):
+                client_id = st.session_state[user_client_id_key]
+                client_secret = st.session_state[user_client_secret_key]
     except:
         pass
     
-    # 2. 환경변수에서 API 키 가져오기
+    # 2. 환경변수에서 API 키 가져오기 (공유됨 - 주의!)
     if not client_id or not client_secret:
         client_id = os.environ.get("NAVER_CLIENT_ID")
         client_secret = os.environ.get("NAVER_CLIENT_SECRET")
     
-    # 3. Streamlit secrets에서 시도
+    # 3. Streamlit secrets에서 시도 (공유됨 - 주의!)
     if not client_id or not client_secret:
         try:
             import streamlit as st
@@ -119,6 +125,26 @@ def fetch_naver_data(keyword_groups, start_date, end_date):
     if not client_id or not client_secret:
         debug_info = f"Client ID: {'설정됨' if client_id else '없음'}, Client Secret: {'설정됨' if client_secret else '없음'}"
         return None, f"❌ 네이버 API 키가 없습니다. {debug_info}"
+    
+    # API 사용량 모니터링 (사용자별)
+    try:
+        import streamlit as st
+        if hasattr(st, 'session_state') and 'user_session_id' in st.session_state:
+            user_prefix = f"user_{st.session_state.user_session_id}_"
+            api_usage_key = f"{user_prefix}api_usage_count"
+            
+            # API 사용 횟수 증가
+            if api_usage_key not in st.session_state:
+                st.session_state[api_usage_key] = 0
+            st.session_state[api_usage_key] += 1
+            
+            # 사용량 경고 (하루 1000회 제한 기준)
+            if st.session_state[api_usage_key] > 800:
+                st.warning(f"⚠️ API 사용량이 많습니다! (현재: {st.session_state[api_usage_key]}회)")
+            elif st.session_state[api_usage_key] > 500:
+                st.info(f"📊 API 사용량: {st.session_state[api_usage_key]}회")
+    except:
+        pass
     
     all_rows = []
     
@@ -331,6 +357,34 @@ def main():
     st.markdown('<h1 class="main-title">🔍 키워드 날씨 분석기</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">키워드 검색량과 날씨의 관계를 분석해보세요!</p>', unsafe_allow_html=True)
     
+    # 사용자 세션 ID 생성 (고유 식별자)
+    if 'user_session_id' not in st.session_state:
+        import uuid
+        st.session_state.user_session_id = str(uuid.uuid4())[:8]
+    
+    # 사용자별 API 키 네임스페이스
+    user_prefix = f"user_{st.session_state.user_session_id}_"
+    
+    # 동시 사용자 경고
+    with st.expander("⚠️ 다중 사용자 사용 시 주의사항", expanded=False):
+        st.warning("""
+        **현재 세션 ID**: `{}`
+        
+        **중요한 보안 주의사항:**
+        - 다른 사용자가 동시에 접속하면 **서로 다른 API 키를 사용**해야 합니다
+        - 환경변수나 Streamlit Secrets는 **모든 사용자가 공유**합니다
+        - **보안을 위해서는 '매번 입력' 방식을 권장**합니다
+        - API 사용량은 **모든 사용자가 공유**되므로 주의하세요
+        """.format(st.session_state.user_session_id))
+        
+        if st.button("🔄 새 세션 시작"):
+            del st.session_state.user_session_id
+            # 사용자별 API 키도 삭제
+            keys_to_delete = [key for key in st.session_state.keys() if key.startswith('temp_client_') or key.startswith('api_key_')]
+            for key in keys_to_delete:
+                del st.session_state[key]
+            st.rerun()
+    
     # 사이드바
     with st.sidebar:
         st.markdown("## 🔧 설정")
@@ -361,45 +415,50 @@ def main():
         if api_mode == "매번 입력 (보안 강화)":
             st.info("🔒 **보안 강화 모드**: API 키를 매번 새로 입력합니다.")
             
+            # 사용자별 API 키 키 생성
+            user_client_id_key = f"{user_prefix}temp_client_id"
+            user_client_secret_key = f"{user_prefix}temp_client_secret"
+            user_api_key_time_key = f"{user_prefix}api_key_set_time"
+            
             # 세션 만료 시간 설정 (30분)
             session_timeout = 30 * 60  # 30분
             current_time = time.time()
             
             # 세션 만료 확인
-            if (st.session_state.get('temp_client_id') and 
-                st.session_state.get('temp_client_secret') and
-                st.session_state.get('api_key_set_time', 0) + session_timeout < current_time):
+            if (st.session_state.get(user_client_id_key) and 
+                st.session_state.get(user_client_secret_key) and
+                st.session_state.get(user_api_key_time_key, 0) + session_timeout < current_time):
                 # 세션 만료 - API 키 자동 삭제
-                del st.session_state.temp_client_id
-                del st.session_state.temp_client_secret
-                del st.session_state.api_key_set_time
+                del st.session_state[user_client_id_key]
+                del st.session_state[user_client_secret_key]
+                del st.session_state[user_api_key_time_key]
                 st.warning("⏰ API 키 세션이 만료되었습니다. 다시 입력해주세요.")
             
-            client_id = st.text_input("Client ID", type="password", key="secure_client_id")
-            client_secret = st.text_input("Client Secret", type="password", key="secure_client_secret")
+            client_id = st.text_input("Client ID", type="password", key=f"{user_prefix}secure_client_id")
+            client_secret = st.text_input("Client Secret", type="password", key=f"{user_prefix}secure_client_secret")
             
             if client_id and client_secret:
-                # 세션에 임시 저장 (페이지 새로고침 시 사라짐)
-                st.session_state.temp_client_id = client_id
-                st.session_state.temp_client_secret = client_secret
-                st.session_state.api_key_set_time = current_time
+                # 사용자별 세션에 임시 저장
+                st.session_state[user_client_id_key] = client_id
+                st.session_state[user_client_secret_key] = client_secret
+                st.session_state[user_api_key_time_key] = current_time
                 st.success("✅ API 키가 임시로 설정되었습니다! (30분 후 자동 만료)")
-            elif st.session_state.get('temp_client_id') and st.session_state.get('temp_client_secret'):
+            elif st.session_state.get(user_client_id_key) and st.session_state.get(user_client_secret_key):
                 # 남은 시간 계산
-                remaining_time = int((st.session_state.get('api_key_set_time', 0) + session_timeout - current_time) / 60)
+                remaining_time = int((st.session_state.get(user_api_key_time_key, 0) + session_timeout - current_time) / 60)
                 if remaining_time > 0:
                     st.success(f"✅ 임시 API 키가 설정되어 있습니다! (남은 시간: {remaining_time}분)")
                     
                     col1, col2 = st.columns(2)
                     with col1:
-                        if st.button("🗑️ API 키 삭제"):
-                            del st.session_state.temp_client_id
-                            del st.session_state.temp_client_secret
-                            del st.session_state.api_key_set_time
+                        if st.button("🗑️ API 키 삭제", key=f"{user_prefix}delete_btn"):
+                            del st.session_state[user_client_id_key]
+                            del st.session_state[user_client_secret_key]
+                            del st.session_state[user_api_key_time_key]
                             st.rerun()
                     with col2:
-                        if st.button("🔄 시간 연장"):
-                            st.session_state.api_key_set_time = current_time
+                        if st.button("🔄 시간 연장", key=f"{user_prefix}extend_btn"):
+                            st.session_state[user_api_key_time_key] = current_time
                             st.success("✅ 세션이 30분 연장되었습니다!")
                             st.rerun()
                 else:
@@ -457,6 +516,27 @@ def main():
                 ```
                 """)
         
+        # API 사용량 표시
+        api_usage_key = f"{user_prefix}api_usage_count"
+        if api_usage_key in st.session_state:
+            usage_count = st.session_state[api_usage_key]
+            st.markdown("---")
+            st.markdown("### 📊 API 사용량")
+            
+            if usage_count > 800:
+                st.error(f"🚨 **높음**: {usage_count}회 (일일 한도 근접)")
+            elif usage_count > 500:
+                st.warning(f"⚠️ **주의**: {usage_count}회")
+            elif usage_count > 100:
+                st.info(f"📈 **보통**: {usage_count}회")
+            else:
+                st.success(f"✅ **정상**: {usage_count}회")
+            
+            if st.button("🔄 사용량 초기화", key=f"{user_prefix}reset_usage"):
+                st.session_state[api_usage_key] = 0
+                st.success("✅ API 사용량이 초기화되었습니다!")
+                st.rerun()
+        
         # API 키 설정 도움말
         with st.expander("📖 API 키 설정 도움말"):
             st.markdown("""
@@ -470,6 +550,11 @@ def main():
             - API 키는 절대 공개하지 마세요
             - GitHub에 업로드할 때는 환경변수나 Streamlit Secrets를 사용하세요
             - 정기적으로 API 키를 갱신하세요
+            - **다중 사용자 환경에서는 '매번 입력' 방식을 권장합니다**
+            
+            **API 사용량 제한:**
+            - 일일 1,000회 제한 (네이버 정책)
+            - 사용량이 많으면 다른 사용자에게 영향을 줄 수 있습니다
             """)
         
         # 검색량 변환 옵션
