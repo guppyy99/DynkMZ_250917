@@ -7,6 +7,7 @@ from datetime import datetime, date, timedelta
 import os
 import requests
 import json
+import time
 
 # .env 파일 로드 (선택사항)
 try:
